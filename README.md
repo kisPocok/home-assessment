@@ -1,15 +1,7 @@
-# express
+# Duvo Homework Project
 
-To install dependencies:
+## Tradeoffs
 
-```bash
-bun install
-```
+This is a one hour long take home project. I had to make tradeoffs to meet the time constraint and meet the requirements. Therefore I will list the tradeoffs here.
 
-To run:
-
-```bash
-bun run src/index.ts
-```
-
-This project was created using `bun init` in bun v1.3.3. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+- ...
