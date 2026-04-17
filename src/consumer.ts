@@ -28,21 +28,24 @@ export function createConsumer(
   let isProcessing = false;
 
   async function processNext() {
-    const job = jobs.shift();
-    if (!job) {
-      logger.info("No jobs to process");
-      return;
-    }
-
-    logger.info({ job }, `Processing job: ${job.name}`);
-
+    if (isProcessing) return;
+    isProcessing = true;
     try {
-      let container;
-      if (job.type === "browser") {
-        container = await docker.runBrowser(job.id, job.name, 0);
-      } else {
-        container = await docker.runHttpServer(job.id, job.name, 0);
+      const job = jobs.shift();
+      if (!job) {
+        logger.info("No jobs to process");
+        return;
       }
+
+      logger.info({ job }, `Processing job: ${job.name}`);
+
+      try {
+        let container;
+        if (job.type === "browser") {
+          container = await docker.runBrowser(job.id, job.name, 0);
+        } else {
+          container = await docker.runHttpServer(job.id, job.name, 0);
+        }
 
       runningContainers.push({
         jobId: job.id,
@@ -51,9 +54,12 @@ export function createConsumer(
         type: job.type,
       });
 
-      logger.info({ jobId: job.id, container }, "Job processed successfully");
-    } catch (err) {
-      logger.error({ err, jobId: job.id }, "Job failed - container error");
+        logger.info({ jobId: job.id, container }, "Job processed successfully");
+      } catch (err) {
+        logger.error({ err, jobId: job.id }, "Job failed - container error");
+      }
+    } finally {
+      isProcessing = false;
     }
   }
 
