@@ -4,6 +4,7 @@
 import { createApp, type Job } from "./app";
 import { createConsumer, type RunningContainer } from "./consumer";
 import { createDockerClient } from "./docker";
+import { createInsightsConsumer } from "./insights";
 import logger from "./logger";
 
 const port = process.env.PORT || 3000;
@@ -15,6 +16,11 @@ const runningContainers: RunningContainer[] = [];
 const app = createApp(logger, jobs);
 const docker = createDockerClient(logger.child({ component: "docker" }));
 const consumer = createConsumer(jobs, runningContainers, logger.child({ component: "consumer" }), docker);
+const insights = createInsightsConsumer(
+  runningContainers,
+  logger.child({ component: "insights" }),
+  docker
+);
 
 async function start() {
   try {
@@ -25,6 +31,9 @@ async function start() {
 
   consumer.start();
   logger.info("Jobs consumer started (polling every 5s)");
+
+  insights.start();
+  logger.info("Insights consumer started (polling container state every 5s)");
 }
 
 void start();
@@ -37,6 +46,7 @@ const server = app.listen(port, () => {
 function shutdown() {
   logger.info("Shutting down...");
   consumer.stop();
+  insights.stop();
   server.close(() => {
     logger.info("Server closed");
     process.exit(0);
