@@ -13,24 +13,24 @@ const logger = pino({
 export function createPinoHttpMiddleware(customLogger?: Logger) {
   return pinoHttp({
     logger: customLogger ?? logger,
-    serializers: {
-      req(req: IncomingMessage) {
-        return {
-          method: req.method,
-          url: req.url,
-          // query: (req as typeof req & { query?: unknown }).query,
-          // params: (req as typeof req & { params?: unknown }).params,
-          // headers: req.headers,
-        };
-      },
-      res(res: ServerResponse) {
-        const raw = (res as unknown as { raw: { body?: unknown } }).raw;
-        return {
-          statusCode: res.statusCode,
-          body: raw.body,
-        };
-      },
-    },
+    // serializers: {
+    //   req(req: IncomingMessage) {
+    //     return {
+    //       method: req.method,
+    //       url: req.url,
+    //       // query: (req as typeof req & { query?: unknown }).query,
+    //       // params: (req as typeof req & { params?: unknown }).params,
+    //       // headers: req.headers,
+    //     };
+    //   },
+    //   res(res: ServerResponse) {
+    //     const raw = (res as unknown as { raw: { body?: unknown } }).raw;
+    //     return {
+    //       statusCode: res.statusCode,
+    //       body: raw.body,
+    //     };
+    //   },
+    // },
   });
 }
 

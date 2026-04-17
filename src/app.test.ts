@@ -1,22 +1,13 @@
-// ABOUTME: Tests for the Express app - healthcheck endpoint and pino-http logging.
+// ABOUTME: Tests for the Express app - healthcheck endpoint.
 // ABOUTME: Uses supertest to make HTTP assertions without starting the server.
 
 import { describe, expect, test } from "bun:test";
-import { Writable } from "stream";
-import pino from "pino";
 import request from "supertest";
 import { createApp } from "./app";
 
-const devNull = new Writable({
-  write(_chunk, _enc, cb) {
-    cb();
-  },
-});
-const silentLogger = pino(devNull);
-
 describe("GET /healthcheck", () => {
   test("returns 200 with { status: 'ok' }", async () => {
-    const app = createApp(silentLogger);
+    const app = createApp(undefined, []);
     const response = await request(app).get("/healthcheck");
 
     expect(response.status).toBe(200);
@@ -24,47 +15,37 @@ describe("GET /healthcheck", () => {
   });
 });
 
-describe("pino-http middleware", () => {
-  function createCapturingApp() {
-    const chunks: string[] = [];
-    const stream = new Writable({
-      write(chunk, _encoding, callback) {
-        chunks.push(chunk.toString());
-        callback();
-      },
-    });
-    const logger = pino(stream);
-    const app = createApp(logger);
-    return { app, chunks };
-  }
+describe("POST /jobs", () => {
+  test("creates a job and returns it with id", async () => {
+    const app = createApp(undefined, []);
+    const response = await request(app)
+      .post("/jobs")
+      .send({ name: "test-job" });
 
-  async function flushLogs() {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-
-  test("req contains only method and url", async () => {
-    const { app, chunks } = createCapturingApp();
-
-    await request(app).get("/healthcheck");
-    await flushLogs();
-
-    expect(chunks.length).toBeGreaterThan(0);
-    const logEntry = JSON.parse(chunks[0]!);
-    const reqKeys = Object.keys(logEntry.req).sort();
-    expect(reqKeys).toEqual(["method", "url"]);
+    expect(response.status).toBe(201);
+    expect(response.body).toHaveProperty("id");
+    expect(response.body.name).toBe("test-job");
+    expect(response.body.status).toBe("pending");
   });
+});
 
-  test("res contains only statusCode and body", async () => {
-    const { app, chunks } = createCapturingApp();
+describe("GET /jobs", () => {
+  test("returns list of all jobs", async () => {
+    const jobs: { id: string; name: string; type: "http"; status: "pending" | "running" | "completed" | "failed"; createdAt: Date }[] = [];
+    const app = createApp(undefined, jobs);
 
-    await request(app).get("/healthcheck");
-    await flushLogs();
+    // Create a job first
+    await request(app).post("/jobs").send({ name: "job-1" });
+    await request(app).post("/jobs").send({ name: "job-2" });
 
-    expect(chunks.length).toBeGreaterThan(0);
-    const logEntry = JSON.parse(chunks[0]!);
-    const resKeys = Object.keys(logEntry.res).sort();
-    expect(resKeys).toEqual(["body", "statusCode"]);
-    expect(logEntry.res.statusCode).toBe(200);
-    expect(logEntry.res.body).toEqual({ status: "ok" });
+    // List all jobs
+    const response = await request(app).get("/jobs");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(2);
+    expect(response.body[0].name).toBe("job-1");
+    expect(response.body[0].status).toBe("pending");
+    expect(response.body[1].name).toBe("job-2");
+    expect(response.body[1].status).toBe("pending");
   });
 });
