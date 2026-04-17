@@ -3,6 +3,7 @@
 
 import { describe, expect, test, mock } from "bun:test";
 import { createConsumer } from "./consumer";
+import type { RunningContainer } from "./consumer";
 import type { Job } from "./app";
 import type { DockerClient, ContainerInfo } from "./docker";
 import { Writable } from "stream";
@@ -35,12 +36,14 @@ function createMockDockerClient(
       id: "mock-container-id",
       state: { status: "running", running: true },
     })),
+    reapLeftoverContainers: mock(() => Promise.resolve()),
   };
 }
 
 describe("Consumer", () => {
   test("processes next job from queue and removes it", async () => {
     const jobs: Job[] = [];
+    const runningContainers: RunningContainer[] = [];
     const job: Job = {
       id: "1",
       name: "test-job",
@@ -51,7 +54,7 @@ describe("Consumer", () => {
     jobs.push(job);
 
     const docker = createMockDockerClient();
-    const consumer = createConsumer(jobs, silentLogger, docker);
+    const consumer = createConsumer(jobs, runningContainers, silentLogger, docker);
     consumer.start();
 
     await new Promise<void>((resolve) => setTimeout(resolve, 50));
@@ -68,12 +71,12 @@ describe("Consumer", () => {
     ];
 
     const docker = createMockDockerClient();
-    const consumer = createConsumer(jobs, silentLogger, docker);
+    const consumer = createConsumer(jobs, [], silentLogger, docker);
     consumer.start();
 
     await new Promise<void>((resolve) => setTimeout(resolve, 50));
     expect(jobs).toHaveLength(1);
-    expect(jobs[0].id).toBe("2");
+    expect(jobs[0]!.id).toBe("2");
 
     await new Promise<void>((resolve) => setTimeout(resolve, 5100));
     expect(jobs).toHaveLength(0);
@@ -84,7 +87,7 @@ describe("Consumer", () => {
   test("does nothing when queue is empty", async () => {
     const jobs: Job[] = [];
     const docker = createMockDockerClient();
-    const consumer = createConsumer(jobs, silentLogger, docker);
+    const consumer = createConsumer(jobs, [], silentLogger, docker);
     consumer.start();
 
     await new Promise<void>((resolve) => setTimeout(resolve, 100));
@@ -101,7 +104,7 @@ describe("Consumer", () => {
     ];
 
     const docker = createMockDockerClient();
-    const consumer = createConsumer(jobs, silentLogger, docker);
+    const consumer = createConsumer(jobs, [], silentLogger, docker);
     consumer.start();
 
     await new Promise<void>((resolve) => setTimeout(resolve, 50));
@@ -111,7 +114,7 @@ describe("Consumer", () => {
 
     await new Promise<void>((resolve) => setTimeout(resolve, 5200));
     expect(jobs).toHaveLength(1);
-    expect(jobs[0].id).toBe("2");
+    expect(jobs[0]!.id).toBe("2");
   }, 10000);
 
   test("logs container URL when processing a job", async () => {
@@ -132,7 +135,7 @@ describe("Consumer", () => {
       url: "http://localhost:3001",
       name: "test-job",
     }));
-    const consumer = createConsumer(jobs, capturingLogger, docker);
+    const consumer = createConsumer(jobs, [], capturingLogger, docker);
     consumer.start();
 
     await new Promise<void>((resolve) => setTimeout(resolve, 50));
@@ -163,7 +166,7 @@ describe("Consumer", () => {
 
     jobs.push({ id: "1", name: "test-job", type: "http", status: "pending", createdAt: new Date() });
 
-    const consumer = createConsumer(jobs, capturingLogger, failingDocker);
+    const consumer = createConsumer(jobs, [], capturingLogger, failingDocker);
     consumer.start();
 
     await new Promise<void>((resolve) => setTimeout(resolve, 50));
@@ -173,6 +176,39 @@ describe("Consumer", () => {
     const logs = chunks.map((c: string) => JSON.parse(c) as { msg?: string });
     const errorLog = logs.find((l) => l.msg?.includes("Job failed"));
     expect(errorLog).toBeDefined();
+
+    consumer.stop();
+  });
+
+  test("adds container to runningContainers after starting", async () => {
+    const jobs: Job[] = [];
+    const runningContainers: RunningContainer[] = [];
+    const job: Job = {
+      id: "job-123",
+      name: "test-job",
+      type: "http",
+      status: "pending",
+      createdAt: new Date(),
+    };
+    jobs.push(job);
+
+    const docker = createMockDockerClient(() => Promise.resolve({
+      id: "container-456",
+      url: "http://localhost:8080",
+      name: "test-job",
+    }));
+    const consumer = createConsumer(jobs, runningContainers, silentLogger, docker);
+    consumer.start();
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    expect(runningContainers).toHaveLength(1);
+    expect(runningContainers[0]).toEqual({
+      jobId: "job-123",
+      containerId: "container-456",
+      name: "test-job",
+      type: "http",
+    });
 
     consumer.stop();
   });

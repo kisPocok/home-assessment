@@ -3,7 +3,7 @@
 // ABOUTME: Starts Docker containers for each job using dockerode.
 
 import type { Logger } from "pino";
-import type { Job } from "./app";
+import type { Job, JobType } from "./app";
 import { createDockerClient, type DockerClient } from "./docker";
 
 export type Consumer = {
@@ -11,8 +11,16 @@ export type Consumer = {
   stop: () => void;
 };
 
+export type RunningContainer = {
+  jobId: string;
+  containerId: string;
+  name: string;
+  type: JobType;
+};
+
 export function createConsumer(
   jobs: Job[],
+  runningContainers: RunningContainer[],
   logger: Logger,
   docker: DockerClient = createDockerClient(logger.child({ component: "docker" }))
 ): Consumer {
@@ -31,10 +39,18 @@ export function createConsumer(
     try {
       let container;
       if (job.type === "browser") {
-        container = await docker.runBrowser(job.id, job.name, "");
+        container = await docker.runBrowser(job.id, job.name, 0);
       } else {
-        container = await docker.runHttpServer(job.id, job.name, "");
+        container = await docker.runHttpServer(job.id, job.name, 0);
       }
+
+      runningContainers.push({
+        jobId: job.id,
+        containerId: container.id,
+        name: job.name,
+        type: job.type,
+      });
+
       logger.info({ jobId: job.id, container }, "Job processed successfully");
     } catch (err) {
       logger.error({ err, jobId: job.id }, "Job failed - container error");
