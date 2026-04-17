@@ -6,13 +6,24 @@
     "dev": "bun --hot src/index.ts",
     "start": "bun src/index.ts",
     "test": "bun test",
-    "test:watch": "bun test --watch"
+    "test:watch": "bun test --watch",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bun": "latest",
     "@types/express": "^5.0.6",
     "@types/supertest": "^7.2.0",
-    "supertest": "^7.2.2"
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-n": "^17.24.0",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "supertest": "^7.2.2",
+    "typescript-eslint": "^8.58.1"
   },
   "peerDependencies": {
     "typescript": "^5"

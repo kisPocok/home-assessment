@@ -7,7 +7,11 @@ import pino from "pino";
 import request from "supertest";
 import { createApp } from "./app";
 
-const devNull = new Writable({ write(_chunk, _enc, cb) { cb(); } });
+const devNull = new Writable({
+  write(_chunk, _enc, cb) {
+    cb();
+  },
+});
 const silentLogger = pino(devNull);
 
 describe("GET /healthcheck", () => {
