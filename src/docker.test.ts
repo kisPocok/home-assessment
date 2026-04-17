@@ -134,12 +134,19 @@ describe("DockerClient labels (integration)", () => {
     const container = await docker.runHttpServer("job-123", "test-job", 0);
 
     const dockerode = new Docker();
-    const containerInfo = await dockerode.getContainer(container.id).inspect();
+    const labeled = await dockerode.listContainers({
+      all: true,
+      filters: {
+        id: [container.id],
+        label: ["duvo.managed=true"],
+      },
+    });
 
-    expect(containerInfo.Config.Labels["duvo.managed"]).toBe("true");
-    expect(containerInfo.Config.Labels["duvo.job.id"]).toBe("job-123");
-    expect(containerInfo.Config.Labels["duvo.job.name"]).toBe("test-job");
-    expect(containerInfo.Config.Labels["duvo.job.type"]).toBe("http");
+    expect(labeled.length).toBe(1);
+    expect(labeled[0]?.Labels["duvo.managed"]).toBe("true");
+    expect(labeled[0]?.Labels["duvo.job.id"]).toBe("job-123");
+    expect(labeled[0]?.Labels["duvo.job.name"]).toBe("test-job");
+    expect(labeled[0]?.Labels["duvo.job.type"]).toBe("http");
   });
 
   test("reaps leftover labeled containers", async () => {
@@ -148,7 +155,7 @@ describe("DockerClient labels (integration)", () => {
       Image: "nginx:alpine",
       name: `duvo-reaper-test-${Date.now()}`,
       Labels: {
-        "duvo-managed": "true",
+        "duvo.managed": "true",
       },
     });
 

@@ -15,6 +15,7 @@ export type DockerClient = {
   runHttpServer: (jobId: string, name: string, port: number | string) => Promise<ContainerInfo>;
   runBrowser: (jobId: string, name: string, cdpPort: number | string) => Promise<ContainerInfo>;
   inspectContainer: (containerId: string) => Promise<{ id: string; state: { status: string; running: boolean } }>;
+  reapLeftoverContainers: () => Promise<void>;
 };
 
 export function createDockerClient(logger: Logger): DockerClient {
@@ -29,8 +30,8 @@ export function createDockerClient(logger: Logger): DockerClient {
         name: `job-${name}-${Date.now()}`,
         Labels: {
           "duvo.managed": "true",
-          "duvo.job.id": jobId,
-          "duvo.job.name": name,
+          "duvo.job.id": String(jobId),
+          "duvo.job.name": String(name),
           "duvo.job.type": "http",
         },
         HostConfig: {
@@ -69,8 +70,8 @@ export function createDockerClient(logger: Logger): DockerClient {
         name: `job-${name}-${Date.now()}`,
         Labels: {
           "duvo.managed": "true",
-          "duvo.job.id": jobId,
-          "duvo.job.name": name,
+          "duvo.job.id": String(jobId),
+          "duvo.job.name": String(name),
           "duvo.job.type": "browser",
         },
         HostConfig: {
@@ -108,20 +109,69 @@ export function createDockerClient(logger: Logger): DockerClient {
 
   async function inspectContainer(containerId: string) {
     logger.debug({ containerId }, "Inspecting container");
-    const container = docker.getContainer(containerId);
-    const info = await container.inspect();
-    return {
-      id: info.Id,
-      state: {
-        status: info.State.Status,
-        running: info.State.Running,
+    try {
+      const container = docker.getContainer(containerId);
+      const info = await container.inspect();
+      return {
+        id: info.Id,
+        state: {
+          status: info.State.Status,
+          running: info.State.Running,
+        },
+      };
+    } catch (err) {
+      logger.error({ err, containerId }, "Failed to inspect container");
+      throw err;
+    }
+  }
+
+  async function reapLeftoverContainers() {
+    const containers = await docker.listContainers({
+      all: true,
+      filters: {
+        label: ["duvo.managed=true"],
       },
-    };
+    });
+
+    if (containers.length === 0) {
+      logger.info("No leftover labeled Docker containers found");
+      return;
+    }
+
+    for (const leftover of containers) {
+      logger.warn(
+        {
+          containerId: leftover.Id,
+          names: leftover.Names,
+          state: leftover.State,
+          status: leftover.Status,
+          labels: leftover.Labels,
+        },
+        "Found leftover labeled Docker container; removing it"
+      );
+
+      const container = docker.getContainer(leftover.Id);
+      try {
+        if (leftover.State === "running") {
+          await container.stop();
+        }
+      } catch (err) {
+        logger.warn({ err, containerId: leftover.Id }, "Failed stopping leftover container; continuing");
+      }
+
+      try {
+        await container.remove({ force: true });
+        logger.info({ containerId: leftover.Id }, "Removed leftover Docker container");
+      } catch (err) {
+        logger.warn({ err, containerId: leftover.Id }, "Failed removing leftover container; it may already be gone");
+      }
+    }
   }
 
   return {
     runHttpServer,
     runBrowser,
     inspectContainer,
+    reapLeftoverContainers,
   };
 }
