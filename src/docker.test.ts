@@ -19,6 +19,7 @@ const silentLogger = pino(devNull);
 interface MockDockerClient extends DockerClient {
   getHttpServerCalls: () => { name: string; port: number | string }[];
   getBrowserCalls: () => { name: string; cdpPort: number | string }[];
+  reapLeftoverContainers: () => Promise<void>;
 }
 
 function createMockDockerClient(
@@ -47,6 +48,7 @@ function createMockDockerClient(
       id: "mock-id",
       state: { status: "running", running: true },
     }),
+    reapLeftoverContainers: async () => Promise.resolve(),
     getHttpServerCalls: () => httpCalls,
     getBrowserCalls: () => browserCalls,
   };
@@ -135,7 +137,26 @@ describe("DockerClient labels (integration)", () => {
     const containerInfo = await dockerode.getContainer(container.id).inspect();
 
     expect(containerInfo.Config.Labels["duvo.managed"]).toBe("true");
+    expect(containerInfo.Config.Labels["duvo.job.id"]).toBe("job-123");
     expect(containerInfo.Config.Labels["duvo.job.name"]).toBe("test-job");
     expect(containerInfo.Config.Labels["duvo.job.type"]).toBe("http");
+  });
+
+  test("reaps leftover labeled containers", async () => {
+    const dockerode = new Docker();
+    const container = await dockerode.createContainer({
+      Image: "nginx:alpine",
+      name: `duvo-reaper-test-${Date.now()}`,
+      Labels: {
+        "duvo-managed": "true",
+      },
+    });
+
+    await container.start();
+
+    const docker = createDockerClient(silentLogger);
+    await docker.reapLeftoverContainers();
+
+    await expect(container.inspect()).rejects.toThrow();
   });
 });
