@@ -30,6 +30,7 @@ export function createConsumer(
   async function processNext() {
     if (isProcessing) return;
     isProcessing = true;
+
     try {
       const job = jobs.shift();
       if (!job) {
@@ -46,14 +47,12 @@ export function createConsumer(
         } else {
           container = await docker.runHttpServer(job.id, job.name, 0);
         }
-
-      runningContainers.push({
-        jobId: job.id,
-        containerId: container.id,
-        name: job.name,
-        type: job.type,
-      });
-
+        runningContainers.push({
+          jobId: job.id,
+          containerId: container.id,
+          name: job.name,
+          type: job.type,
+        });
         logger.info({ jobId: job.id, container }, "Job processed successfully");
       } catch (err) {
         logger.error({ err, jobId: job.id }, "Job failed - container error");
